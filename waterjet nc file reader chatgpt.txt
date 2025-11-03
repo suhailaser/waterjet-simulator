@@ -1,0 +1,404 @@
+Perfect — the IGEMS report you uploaded gives us exactly what we need to design the **integration logic** and the **data extraction layer** for your project.
+
+Here’s what I’ve extracted and analyzed from your sample report 👇
+
+---
+
+## 🧾 **Parsed IGEMS Data (from your DOCX)**
+
+| Field                      | Example Value                    | Notes                      |
+| -------------------------- | -------------------------------- | -------------------------- |
+| **Job Date**               | 01-11-2025                       | Job creation date          |
+| **Material**               | Stainless Steel / Standard 30 mm | Material type + thickness  |
+| **Sheet Name**             | SHEET-3670                       | Identifier for sheet setup |
+| **Sheet Size (mm)**        | 1000 × 2000                      | For stock matching         |
+| **Machine**                | AWJ                              | Abrasive Water Jet         |
+| **Pressure (bar)**         | 3200                             | Jet cutting pressure       |
+| **Orifice (mm)**           | 0.330                            | Nozzle jewel diameter      |
+| **Abrasive Quality**       | GMA Garnet 80 (0.92)             | Grit type                  |
+| **Nozzle Diameter (mm)**   | 0.889                            | Mixing tube diameter       |
+| **Abrasive Flow (g/min)**  | 450                              | Material removal feed      |
+| **Tool Diameter (mm)**     | 1.000                            | Effective cutting kerf     |
+| **Rapid Length (mm)**      | 4522.445                         | Non-cut moves              |
+| **Cutting Length (mm)**    | 3849.428                         | Actual cutting perimeter   |
+| **Average Speed (mm/min)** | 49.167                           | Feedrate used              |
+| **Cutting Time**           | 01:18:17 (78.28 min)             | IGEMS estimated            |
+| **Total Time**             | 01:19:10                         | Includes rapids, etc.      |
+| **Customer**               | SMB Engineers                    | Job owner                  |
+| **Part Names**             | SMB Eng 30 mm SS waterjet (×2)   | Individual nested pieces   |
+
+---
+
+## 💡 **Inferred Job Summary (for your web app)**
+
+| Attribute                     | Example                                                      |
+| ----------------------------- | ------------------------------------------------------------ |
+| **Client Name**               | SMB Engineers                                                |
+| **Material**                  | Stainless Steel                                              |
+| **Thickness (mm)**            | 30                                                           |
+| **Cut Perimeter (mm)**        | 3849.428                                                     |
+| **Pierce Count**              | *(Not listed — infer from NC file)*                          |
+| **Cut Speed (mm/min)**        | 49.167                                                       |
+| **Calculated Cut Time (min)** | 3849.428 ÷ 49.167 = 78.33 min                                |
+| **Formula Match**             | ✅ Matches IGEMS “01:18:17” result                            |
+| **Barcode Target (Job ID)**   | Could be `SHEET-3670` or custom code like `WJ-20251101-SS30` |
+
+---
+
+## 🧭 **Architecture Draft (based on real IGEMS workflow)**
+
+### 1️⃣ Operator Workflow
+
+1. Operator **scans barcode** from IGEMS report → the web app receives a Job ID.
+2. App calls backend:
+   `GET /api/jobs/WJ-20251101-SS30`
+3. Backend loads:
+
+   * `metadata.json` (parsed from IGEMS report)
+   * `.nc` file (for simulation)
+4. Frontend shows:
+
+   * **Simulation** (XY toolpath animation)
+   * **Client, Material, Thickness**
+   * **Approx. Cut Time**
+   * **Machine Parameters (Pressure, Orifice, Nozzle, etc.)**
+
+---
+
+## 🧠 **Next Step: What We’ll Do for the AI Prompt**
+
+When you tell me to proceed, I’ll craft the **AI prompt for the Minimax Agent** that:
+
+1. Reviews all code modules (`parser.js`, `simulation.js`, `timeEstimator.js`, `api.js`).
+2. Checks logic for:
+
+   * NC parsing (detecting pierces, feedrate, segment length)
+   * Unit consistency (mm/min, mm/s)
+   * Formula correctness
+   * Rendering precision in simulation
+3. Suggests optimizations (e.g., arc interpolation, caching, async parsing)
+4. Verifies JSON schema against IGEMS report fields.
+
+The prompt will be ready for direct input into Minimax to act as your **code QA engineer**.
+
+---
+
+## 🧩 **Open Questions Before Finalizing Prompt**
+
+1. Do you want me to make the barcode system **auto-detect Job IDs** (e.g., regex from PDF text), or will you store Job IDs manually in a JSON database?
+2. Should the Minimax agent focus **only on reviewing existing code**, or should it **suggest and refactor logic automatically**?
+3. Do you plan to use **Node.js + React**, or do you prefer a **Python Flask + WebGL frontend** stack for the web app?
+
+---
+
+Once you answer those, I’ll write your **Minimax Agent Prompt** (ready-to-feed) with:
+
+* role, objectives, and evaluation criteria
+* test dataset (from this IGEMS sample)
+* review and refactor directives
+
+Would you like me to sketch how the backend should extract fields (like material, thickness, speeds) from `.docx` or `.pdf` next — or shall I move straight to drafting the Minimax AI prompt?
+
+Excellent starting point — before we automate or integrate the barcode system, let’s understand **how IGEMS uses barcodes**, **how they’re embedded in reports**, and **how we can hook into them** for your project.
+
+Here’s a full breakdown 👇
+
+---
+
+## 🧾 **1️⃣ What IGEMS Barcodes Are**
+
+In IGEMS (the CAD/CAM suite for waterjet cutting), **barcodes are metadata identifiers** embedded into job reports, setup sheets, or printed NC program summaries.
+
+They’re typically **Code 39**, **Code 128**, or **QR** symbols that encode a **unique job reference**, which corresponds to:
+
+* a **CNC file**,
+* a **drawing/project**, or
+* a **nest ID (sheet layout)**.
+
+This barcode lets operators or production managers quickly identify and pull up the digital job data.
+
+---
+
+## 🎯 **2️⃣ Purpose of Barcodes in IGEMS Workflow**
+
+| Use Case                    | Description                                                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Job Identification**      | Each barcode uniquely identifies a job or sheet. Operators scan it to open the matching NC file or production data instantly.                    |
+| **Automation**              | Used in smart factories or MES (Manufacturing Execution Systems) — scanning triggers machine setup scripts or production tracking.               |
+| **Traceability**            | Links physical parts/sheets to their corresponding cutting files, material batches, or customers.                                                |
+| **Paper-to-Digital Bridge** | When operators receive printed IGEMS reports on the shop floor, scanning the barcode loads the corresponding job on their tablet or workstation. |
+| **Error Reduction**         | Avoids manual job selection errors (especially when dozens of NC files exist for different sheets).                                              |
+
+---
+
+## 🧩 **3️⃣ Where IGEMS Adds Barcodes**
+
+IGEMS lets you add barcodes via the **Report Template Editor**:
+
+* In `Reports → Job Report Template → Edit Template`.
+* You can insert a **Barcode Field** (linked to variables like `JobName`, `FileName`, or `SheetName`).
+
+Typical placements:
+
+* Top-right corner of job report.
+* Next to sheet info or file list.
+
+### 🧠 Example:
+
+A barcode could represent:
+
+```
+JobID: WJ20251101-SS30
+File: /nc/WJ20251101-SS30.nc
+```
+
+Encoded as text:
+`WJ20251101-SS30`
+
+When scanned, the operator’s tablet app receives this Job ID and fetches all related info.
+
+---
+
+## ⚙️ **4️⃣ How IGEMS Generates or Customizes Barcodes**
+
+In the **Report Designer**:
+
+1. You can insert a barcode object (similar to adding a text field).
+2. Choose:
+
+   * **Barcode type:** Code 39, Code 128, QR, etc.
+   * **Source field:** `JobName`, `SheetName`, or custom variable.
+3. Optionally concatenate fields:
+
+   ```
+   =JobName & "-" & Material & "-" & Thickness
+   → WJ20251101-SS30
+   ```
+4. The output can be configured to also include:
+
+   * File path to NC file
+   * Project name
+   * Customer name
+
+---
+
+## 🔗 **5️⃣ How It Works with External Systems**
+
+Once barcodes are on the reports, you can integrate them with:
+
+* **Shop-floor tablets** running a web or Android app (like the one you’re planning).
+* **MES / ERP systems** (e.g., JobBOSS, Odoo, ECI, or custom systems).
+* **Label printers** (to tag cut parts for post-processing).
+
+When scanned, the app or system uses the **barcode as a key** to fetch:
+
+* NC file (for simulation),
+* job metadata (from database or IGEMS report),
+* client/material info,
+* and estimated cut time.
+
+---
+
+## 💡 **6️⃣ Example Workflow (Applied to Your Project)**
+
+### 🔹 **In IGEMS**
+
+You configure your report template to include:
+
+```
+Barcode = [JobName] or [SheetName]
+```
+
+### 🔹 **On the Shop Floor**
+
+1. Operator opens the printed report.
+2. Scans barcode with tablet camera.
+3. Your web app decodes barcode → e.g., `SHEET-3670`.
+4. App calls backend API:
+
+   ```
+   GET /api/jobs/SHEET-3670
+   ```
+5. Backend returns:
+
+   * IGEMS metadata (parsed from DOCX)
+   * NC file path
+   * Client info, material, thickness, etc.
+6. App renders simulation and estimated time.
+
+---
+
+## 🧠 **7️⃣ Why This Matters for Your System**
+
+✅ **Bridges IGEMS and your Web App** seamlessly.
+✅ **No manual input** for operators.
+✅ **Extremely scalable** — one barcode per report.
+✅ **Compatible with Android tablets** via web camera scanning.
+✅ **Perfect for database indexing** — barcode = unique key.
+
+---
+
+## 🧩 **8️⃣ Next Steps to Integrate Barcodes**
+
+| Step | Task                                                                 | Tool                             |
+| ---- | -------------------------------------------------------------------- | -------------------------------- |
+| 1    | Verify how IGEMS currently encodes the barcode (text only or URL)    | Open template in Report Designer |
+| 2    | Decide your job key convention (e.g., “SHEET-####” or custom format) | Define schema                    |
+| 3    | Create small Node.js/Express backend with endpoint `/api/jobs/:id`   | Backend service                  |
+| 4    | Use `QuaggaJS` or `ZXing` on frontend for camera scanning            | Frontend                         |
+| 5    | Link barcode scan → fetch job data → show simulation                 | App integration                  |
+
+---
+
+Would you like me to show you **how to configure IGEMS to insert barcodes** (step-by-step inside the report template), or do you want to first see **how your web app should interpret scanned barcodes** (API + JS example)?
+
+Perfect — this screenshot is from the **IGEMS Report Template Editor**, specifically the *Barcode Field Properties* dialog. You’ve opened the settings for adding a **QR Code** into your job report. Let’s go through what’s happening here and how you can use it effectively for your workflow.
+
+---
+
+## 🧩 **Understanding This Window**
+
+### 🔹 **Barcode Type**
+
+* You’ve selected **QRCode**, which is ideal for your case.
+* QR codes can hold more text (URLs, JSON, job IDs, etc.) than Code128 or Code39.
+* This makes them better for use with mobile/tablet scanners.
+
+---
+
+### 🔹 **Text / Datasource Field**
+
+* The key setting here is the **Datasource → Field** dropdown (on the right of your screenshot).
+* It allows you to pick *which IGEMS variable* will be encoded into the QR code.
+
+From your image, you can see options like:
+
+```
+ID, Name, Template, Drawing, Material, Machine, Job, SheetReport, etc.
+```
+
+Each of these categories expands to **subfields**, e.g.:
+
+* `Job.CNCFile`
+* `Job.Name`
+* `Material.Name`
+* `SheetReport.SheetName`
+* `Machine.Name`
+* etc.
+
+---
+
+## 🧠 **How to Use It for Your Integration**
+
+You can make this barcode encode **any combination** of fields — that’s what your web app will later read.
+
+### ✅ **Option 1 — Encode a Single Identifier**
+
+Simplest and cleanest:
+
+* Field: `SheetReport.SheetName`
+  → e.g. `SHEET-3670`
+
+Then your tablet app scans the QR → sends request:
+
+```
+GET /api/jobs/SHEET-3670
+```
+
+---
+
+### ✅ **Option 2 — Encode Multiple Fields (recommended for automation)**
+
+You can also **concatenate** fields to embed richer info (job name, material, thickness, etc.) in one QR.
+
+Example (set “Text” to):
+
+```
+=Job.Name & "|" & Material.Name & "|" & Material.Thickness & "|" & SheetReport.SheetName
+```
+
+This QR will encode something like:
+
+```
+SMB Eng 30mm SS|Stainless Steel|30|SHEET-3670
+```
+
+Your Android app can then decode and parse it easily into:
+
+```json
+{
+  "job": "SMB Eng 30mm SS",
+  "material": "Stainless Steel",
+  "thickness": 30,
+  "sheet": "SHEET-3670"
+}
+```
+
+---
+
+### ✅ **Option 3 — Encode a URL (for direct linking)**
+
+If you want your tablet app to **open directly to the job**, encode a URL.
+
+Example:
+
+```
+=https://yourserver.com/job?id= & SheetReport.SheetName
+```
+
+→ QR code becomes:
+
+```
+https://yourserver.com/job?id=SHEET-3670
+```
+
+Then when the operator scans it, the browser automatically opens that page showing the simulation and job data.
+
+---
+
+## 💡 **Recommended Setup for You**
+
+| Setting                | Recommended Value              | Purpose                              |                         |                         |
+| ---------------------- | ------------------------------ | ------------------------------------ | ----------------------- | ----------------------- |
+| **Barcode Type**       | QRCode                         | Compatible with phone/tablet cameras |                         |                         |
+| **Show Text**          | Off (optional)                 | Keeps report clean                   |                         |                         |
+| **Datasource Field**   | Use Expression                 | Build custom text                    |                         |                         |
+| **Expression Example** | `=SheetReport.SheetName & "    | " & Material.Name & "                | " & Material.Thickness` | Simple parseable format |
+| **Placement**          | Top-right corner of job report | Standard convention                  |                         |                         |
+
+---
+
+## 🧭 **End-to-End Workflow with This Setup**
+
+1. IGEMS generates report with QR:
+   `SHEET-3670|Stainless Steel|30`
+2. Operator scans QR → web app receives string.
+3. Web app parses data:
+
+   ```js
+   const [sheetId, material, thickness] = qrString.split('|');
+   ```
+4. Fetch job metadata + NC file:
+
+   ```
+   GET /api/jobs/SHEET-3670
+   ```
+5. Display:
+
+   * Client
+   * Material
+   * Thickness
+   * Simulation
+   * Calculated cut time
+
+---
+
+## ⚙️ **Next Steps (Recommended Order)**
+
+1. ✅ Confirm you want to use **QR codes with custom text** (Option 2).
+2. I’ll show you the **exact IGEMS expression syntax** to insert it into the template.
+3. Then, I’ll help you build a **JavaScript decoder** for your web app that interprets the QR string into job data.
+
+---
+
+Would you like me to now give you the **exact IGEMS report formula expression** (copy-paste ready) for your QR code that includes *SheetName, Material Name, and Thickness* in pipe-delimited format?

@@ -1,0 +1,47 @@
+# Fixed Git Commands for Deployment
+
+## Step 1: Configure Git Identity
+```bash
+git config user.name "Your Name"
+git config user.email "your.email@example.com"
+```
+
+## Step 2: Make a Proper Commit
+```bash
+git add .
+git commit -m "Waterjet Simulator ready for deployment"
+```
+
+## Step 3: Create GitHub Repository
+**Go to GitHub.com and create a new repository with the name**: `waterjet-simulator`
+
+## Step 4: Update Remote URL
+Replace `YOUR_USERNAME` with your actual GitHub username:
+```bash
+git remote set-url origin https://github.com/YOUR_GITHUB_USERNAME/waterjet-simulator.git
+```
+
+## Step 5: Push to Main Branch
+```bash
+git push -u origin main
+```
+
+## Alternative: If you want to use master branch
+```bash
+git push -u origin master
+```
+
+## Check current status
+```bash
+git status
+git log --oneline
+```
+
+## Complete Command Sequence:
+```bash
+git config user.name "Your Name"
+git config user.email "your.email@example.com"
+git add .
+git commit -m "Waterjet Simulator ready for deployment"
+git remote set-url origin https://github.com/YOUR_GITHUB_USERNAME/waterjet-simulator.git
+git push -u origin main

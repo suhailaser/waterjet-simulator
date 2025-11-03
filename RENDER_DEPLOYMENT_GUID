@@ -1,0 +1,153 @@
+# 🚀 Waterjet Simulator - Render Deployment Guide
+
+## Quick Deployment Steps
+
+### 1. Create GitHub Repository
+```bash
+# Initialize git repository
+git init
+git add .
+git commit -m "Initial commit: Waterjet Simulator"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/waterjet-simulator.git
+git push -u origin main
+```
+
+### 2. Deploy on Render
+
+1. **Visit**: https://render.com
+2. **Sign up** with your GitHub account
+3. **Click**: "New +" → "Web Service"
+4. **Connect** your GitHub repository
+5. **Configure Service**:
+   - **Name**: `waterjet-simulator` (or your choice)
+   - **Region**: Choose closest to you
+   - **Branch**: `main`
+   - **Root Directory**: Leave empty
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+
+### 3. Environment Variables (Optional)
+If needed, add these in Render dashboard:
+```
+NODE_ENV=production
+PORT=10000
+```
+
+### 4. Auto-Deploy Settings
+- ✅ **Auto-Deploy**: Enabled (for automatic updates)
+
+## Application Structure
+
+```
+waterjet-simulator/
+├── src/
+│   ├── backend/
+│   │   ├── server.ts          # Express server
+│   │   └── mockDatabase.ts    # Sample data
+│   ├── frontend/
+│   │   ├── App.tsx            # Main React component
+│   │   ├── BarcodeScanner.tsx # Camera QR scanner
+│   │   ├── SimulationCanvas.tsx # 2D cutting simulation
+│   │   ├── CutTimeCalculator.tsx # Time calculator
+│   │   ├── JobDetails.tsx     # Job information display
+│   │   └── App.css           # Styling
+│   ├── shared/
+│   │   ├── types.ts          # TypeScript interfaces
+│   │   └── ncParser.ts       # G-code parser
+│   └── index.tsx             # React entry point
+├── public/
+│   └── index.html            # HTML template
+├── package.json              # Dependencies and scripts
+├── tsconfig.json            # TypeScript configuration
+├── Procfile                 # Render deployment config
+└── README.md                # Project documentation
+```
+
+## Key Features
+
+### 🏗️ **Full-Stack Architecture**
+- **Backend**: Node.js + Express + TypeScript
+- **Frontend**: React + TypeScript + Canvas API
+- **Database**: Mock database with sample job data
+
+### 🎯 **Core Functionality**
+- **Barcode Scanning**: Camera-based QR code detection
+- **NC File Processing**: G-code parser (G00, G01, G02, G03)
+- **Cutting Simulation**: Real-time 2D visualization
+- **Cut Time Calculator**: Formula-based time calculation
+- **Job Management**: Mock database with sample jobs
+
+### 📱 **Sample Jobs for Testing**
+- **SHEET-3670**: SMB Engineers - Stainless Steel 30mm
+- **TEST-1234**: ABC Manufacturing - Aluminum 10mm
+
+## API Endpoints
+
+Once deployed, the application will be available at:
+```
+https://waterjet-simulator.onrender.com
+```
+
+### Available Endpoints:
+- **GET** `/api/health` - Health check
+- **GET** `/api/jobs/:jobId` - Get job by ID
+- **GET** `/api/jobs` - List all jobs
+- **POST** `/api/calculate-cut-time` - Calculate cut time
+- **POST** `/api/parse-nc` - Parse NC file content
+
+## Post-Deployment Testing
+
+1. **Open**: https://waterjet-simulator.onrender.com
+2. **Test Sample Jobs**:
+   - Click "SHEET-3670" button (Stainless Steel 30mm)
+   - Click "TEST-1234" button (Aluminum 10mm)
+3. **Features to Test**:
+   - Cutting simulation animation
+   - Cut time calculator with custom parameters
+   - Job details display
+   - Canvas zoom/pan controls
+
+## Technical Notes
+
+### 📦 **Dependencies**
+- **Express**: Web server framework
+- **React**: Frontend UI library
+- **TypeScript**: Type safety
+- **jsQR**: QR code scanning library
+- **Canvas API**: 2D graphics rendering
+
+### 🔧 **Build Process**
+- TypeScript compilation: `tsc`
+- React build: `react-scripts build`
+- Production server: Express serving built frontend
+
+### 🌐 **Production Considerations**
+- HTTPS enabled automatically
+- Global CDN distribution
+- Automatic scaling
+- Health monitoring
+- Custom domain support (optional)
+
+## Troubleshooting
+
+### Common Issues:
+1. **Build Fails**: Check that all dependencies are listed in package.json
+2. **Server Won't Start**: Verify PORT environment variable is set
+3. **Frontend Not Loading**: Ensure build command completes successfully
+4. **API Calls Fail**: Check CORS settings and API base URL
+
+### Support:
+- **Render Status**: https://status.render.com
+- **Application Logs**: Available in Render dashboard
+- **Environment**: Production with optimized builds
+
+## Next Steps
+
+After successful deployment:
+1. **Custom Domain**: Add your own domain (optional)
+2. **Database**: Replace mock database with real database
+3. **Authentication**: Add user authentication system
+4. **Monitoring**: Implement application monitoring
+5. **Scaling**: Configure auto-scaling settings
