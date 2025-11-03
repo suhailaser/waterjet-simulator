@@ -1200,6 +1200,69 @@ M30`
                 }
             };
 
+            // Dynamic parameter calculation functions
+            const estimateMaterialThickness = (cuttingSpeed, perimeter, pierceCount) => {
+                // Estimate thickness based on cutting speed and complexity
+                // Higher speeds typically indicate thinner materials
+                // Complex patterns with many pierces suggest thicker materials
+                const complexity = pierceCount / Math.max(perimeter / 1000, 1);
+                let baseThickness = 50; // Default 50mm
+
+                if (cuttingSpeed > 200) baseThickness = 5; // Very thin materials
+                else if (cuttingSpeed > 100) baseThickness = 10; // Thin materials
+                else if (cuttingSpeed > 50) baseThickness = 25; // Medium materials
+                else if (cuttingSpeed > 25) baseThickness = 50; // Thick materials
+                else baseThickness = 100; // Very thick materials
+
+                // Adjust for complexity
+                if (complexity > 0.5) baseThickness *= 1.5; // More complex = thicker
+                else if (complexity < 0.1) baseThickness *= 0.7; // Simple = thinner
+
+                return Math.max(1, Math.min(200, baseThickness)); // Clamp between 1-200mm
+            };
+
+            const calculateMachineParameters = (thickness, cuttingSpeed, perimeter) => {
+                // Pressure calculation based on thickness
+                let pressure = 2000 + (thickness * 20); // Base 2000 bar + 20 bar per mm
+                pressure = Math.max(2000, Math.min(6000, pressure)); // Clamp 2000-6000 bar
+
+                // Orifice diameter based on pressure and thickness
+                let orifice = 0.25 + (thickness / 100) * 0.1; // Base 0.25mm + adjustment
+                orifice = Math.max(0.2, Math.min(0.5, orifice)); // Clamp 0.2-0.5mm
+
+                // Nozzle diameter based on orifice and cutting requirements
+                let nozzle = 0.6 + (thickness / 50) * 0.2; // Base 0.6mm + adjustment
+                nozzle = Math.max(0.5, Math.min(1.5, nozzle)); // Clamp 0.5-1.5mm
+
+                // Abrasive flow based on pressure, orifice, and nozzle
+                let flowRate = (pressure / 1000) * (orifice * 100) * (nozzle * 100) * 0.8;
+                flowRate = Math.max(200, Math.min(800, flowRate)); // Clamp 200-800 g/min
+
+                // Select abrasive quality based on material thickness
+                let abrasiveQuality = 'GMA Garnet 80';
+                if (thickness > 50) abrasiveQuality = 'GMA Garnet 120';
+                else if (thickness > 25) abrasiveQuality = 'GMA Garnet 100';
+                else if (thickness < 5) abrasiveQuality = 'GMA Garnet 60';
+
+                return {
+                    pressure: Math.round(pressure),
+                    orifice: Math.round(orifice * 1000) / 1000, // Round to 3 decimal places
+                    nozzleDiameter: Math.round(nozzle * 1000) / 1000,
+                    abrasiveFlow: Math.round(flowRate),
+                    abrasiveQuality,
+                    toolDiameter: Math.round((nozzle + 0.2) * 1000) / 1000
+                };
+            };
+
+            const estimateMaterialType = (thickness, cuttingSpeed) => {
+                if (thickness <= 3) return 'Thin Metals/Aluminum';
+                if (thickness <= 10) return cuttingSpeed > 100 ? 'Aluminum' : 'Steel';
+                if (thickness <= 25) return cuttingSpeed > 75 ? 'Stainless Steel' : 'Mild Steel';
+                if (thickness <= 50) return 'Thick Steel';
+                if (thickness <= 100) return 'Very Thick Steel';
+                return 'Ultra Thick Materials';
+            };
+
             const handleFileLoaded = (content, filename) => {
                 console.log('File loaded:', filename, 'Content length:', content.length);
                 setLoading(true);
@@ -1213,25 +1276,42 @@ M30`
                         throw new Error('No valid G-code commands found in the file');
                     }
 
-                    // Create job data from file
+                    // Calculate actual sheet size from bounds
                     const bounds = parsedData.boundingBox;
-                    const width = bounds.maxX - bounds.minX || 200;
-                    const height = bounds.maxY - bounds.minY || 200;
+                    const width = Math.max(50, bounds.maxX - bounds.minX); // Minimum 50mm
+                    const height = Math.max(50, bounds.maxY - bounds.minY); // Minimum 50mm
+
+                    // Estimate material properties from cutting data
+                    const estimatedThickness = estimateMaterialThickness(
+                        parsedData.cuttingSpeed,
+                        parsedData.cuttingPerimeter,
+                        parsedData.piercingCount
+                    );
+
+                    const materialType = estimateMaterialType(estimatedThickness, parsedData.cuttingSpeed);
+
+                    // Calculate machine parameters based on estimated material
+                    const machineParams = calculateMachineParameters(
+                        estimatedThickness,
+                        parsedData.cuttingSpeed,
+                        parsedData.cuttingPerimeter
+                    );
 
                     const jobData = {
                         jobId: 'UPLOADED-' + Date.now(),
                         client: filename.replace(/\.[^/.]+$/, ""), // Remove extension
-                        material: { type: 'Unknown', thickness: 10 },
+                        material: {
+                            type: materialType,
+                            thickness: Math.round(estimatedThickness * 10) / 10 // Round to 1 decimal
+                        },
                         sheetName: filename,
-                        sheetSize: { width: Math.max(width, 100), height: Math.max(height, 100) },
+                        sheetSize: {
+                            width: Math.round(width),
+                            height: Math.round(height)
+                        },
                         machine: {
                             name: 'AWJ',
-                            pressure: 3000,
-                            orifice: 0.3,
-                            abrasiveQuality: 'GMA Garnet 80',
-                            nozzleDiameter: 0.8,
-                            abrasiveFlow: 400,
-                            toolDiameter: 1.0
+                            ...machineParams
                         },
                         cuttingParameters: {
                             rapidLength: parsedData.rapidLength,
@@ -1245,12 +1325,12 @@ M30`
                             customer: 'Uploaded File',
                             quantity: 1,
                             cuttingLength: parsedData.cuttingPerimeter,
-                            weight: 1.0,
+                            weight: Math.round((width * height * estimatedThickness * 0.000008) * 10) / 10, // Rough weight calculation
                             singleTime: parsedData.cuttingPerimeter / parsedData.cuttingSpeed,
                             totalTime: parsedData.cuttingPerimeter / parsedData.cuttingSpeed
                         }],
                         estimatedTimes: {
-                            rapid: 0.5,
+                            rapid: Math.round(parsedData.rapidLength / 1000) / 10, // Convert to minutes
                             marking: 0,
                             piercing: parsedData.piercingCount * 0.5,
                             drilling: 0,
