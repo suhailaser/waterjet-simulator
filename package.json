@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc && npm run build:frontend",
     "build:frontend": "react-scripts build",
-    "start": "node dist/server.js",
+    "start": "node dist/backend/server.js",
     "dev": "concurrently \"npm run build:watch\" \"npm run start:server\"",
     "build:watch": "tsc --watch",
     "start:server": "nodemon dist/server.js",
