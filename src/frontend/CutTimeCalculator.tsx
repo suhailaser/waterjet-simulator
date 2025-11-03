@@ -8,9 +8,17 @@ interface JobData {
     thickness: number;
   };
   sheetName: string;
+  sheetSize: {
+    width: number;
+    height: number;
+  };
+  machine: any;
+  parts: any[];
+  estimatedTimes: any;
   ncFileContent: string;
   cuttingSpeed: number;
   pierceTime: number;
+  otherMetadata: any;
   parsedData: any;
 }
 
