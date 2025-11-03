@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Waterjet NC File Reader</title>
+    <title>Enhanced Waterjet NC File Reader</title>
     <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -51,7 +51,7 @@
         .app-main {
             flex: 1;
             padding: 20px;
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             width: 100%;
         }
@@ -98,6 +98,119 @@
             background: #f8f9fa;
             border-radius: 10px;
             padding: 20px;
+        }
+
+        .enhanced-features {
+            background: #e8f5e8;
+            border: 2px solid #4caf50;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .enhanced-features h3 {
+            color: #2e7d32;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .feature-item {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .error-detection {
+            background: #fff3e0;
+            border: 2px solid #ff9800;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .error-detection h4 {
+            color: #e65100;
+            margin-bottom: 10px;
+        }
+
+        .error-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .error-item {
+            background: white;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border-left: 4px solid #ff9800;
+        }
+
+        .error-item.warning {
+            border-left-color: #ffeb3b;
+            background: #fffef0;
+        }
+
+        .error-item.critical {
+            border-left-color: #f44336;
+            background: #ffebee;
+        }
+
+        .coordinate-systems {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .coordinate-system {
+            background: #2196f3;
+            color: white;
+            padding: 8px;
+            text-align: center;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+
+        .gcode-viewer {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 15px 0;
+        }
+
+        .gcode-line {
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+        .gcode-line.rapid {
+            background: rgba(244, 67, 54, 0.2);
+            color: #ffcdd2;
+        }
+
+        .gcode-line.cutting {
+            background: rgba(76, 175, 80, 0.2);
+            color: #c8e6c9;
+        }
+
+        .gcode-line.comment {
+            color: #81c784;
+            font-style: italic;
         }
 
         .scan-button, .manual-button, .job-button, .back-button {
@@ -243,6 +356,10 @@
             .job-buttons {
                 flex-direction: column;
             }
+
+            .coordinate-systems {
+                grid-template-columns: repeat(3, 1fr);
+            }
         }
     </style>
 </head>
@@ -251,6 +368,178 @@
 
     <script type="text/babel">
         const { useState, useRef, useEffect } = React;
+
+        // Enhanced G-code Parser inspired by CNC.js
+        function parseNCFile(content) {
+            const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            const toolPath = [];
+            let cuttingPerimeter = 0;
+            let piercingCount = 0;
+            let rapidLength = 0;
+            let totalFeedRates = [];
+            let errors = [];
+            let warnings = [];
+            
+            // Track bounds for better visualization
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            
+            // Coordinate systems
+            let activeCoordinateSystem = 'G54';
+            let currentPlane = 'G17'; // XY plane
+            let absoluteMode = true;
+            
+            let currentPos = { x: 0, y: 0, z: 0 };
+            let sequence = 0;
+            let lastMoveType = 'rapid';
+
+            for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+                const line = lines[lineNum];
+                const originalLine = line;
+                
+                // Skip empty lines and comments
+                if (line.startsWith(';') || line.startsWith('(') || line.trim() === '') {
+                    continue;
+                }
+
+                try {
+                    const tokens = line.toUpperCase().split(/[\s,]+/);
+                    
+                    // Parse G-codes and M-codes first
+                    tokens.forEach(token => {
+                        if (token.startsWith('G')) {
+                            const gCode = parseInt(token.substring(1));
+                            switch (gCode) {
+                                case 17: currentPlane = 'G17'; break; // XY plane
+                                case 18: currentPlane = 'G18'; break; // XZ plane
+                                case 19: currentPlane = 'G19'; break; // YZ plane
+                                case 90: absoluteMode = true; break; // Absolute positioning
+                                case 91: absoluteMode = false; break; // Relative positioning
+                            }
+                        }
+                        if (token.startsWith('G5') && parseInt(token.substring(1)) >= 54 && parseInt(token.substring(1)) <= 59) {
+                            activeCoordinateSystem = token;
+                        }
+                    });
+
+                    const x = tokens.find(t => t.startsWith('X'))?.substring(1);
+                    const y = tokens.find(t => t.startsWith('Y'))?.substring(1);
+                    const z = tokens.find(t => t.startsWith('Z'))?.substring(1);
+                    const f = tokens.find(t => t.startsWith('F'))?.substring(1);
+                    const gCommand = tokens.find(t => t.startsWith('G'))?.substring(1);
+
+                    if (!gCommand) {
+                        // Check for M-codes or other commands
+                        const hasMovement = x || y || z;
+                        if (hasMovement) {
+                            warnings.push(`Line ${lineNum + 1}: Movement detected without G-code: ${originalLine}`);
+                        }
+                        continue;
+                    }
+
+                    const newPos = {
+                        x: x ? parseFloat(x) : currentPos.x,
+                        y: y ? parseFloat(y) : currentPos.y,
+                        z: z ? parseFloat(z) : currentPos.z
+                    };
+
+                    let moveType, command;
+                    switch (gCommand) {
+                        case '0': moveType = 'rapid'; command = 'G00'; break;
+                        case '1': moveType = 'cutting'; command = 'G01'; break;
+                        case '2': moveType = 'cutting'; command = 'G02'; break;
+                        case '3': moveType = 'cutting'; command = 'G03'; break;
+                        case '4': command = 'G04'; break; // Dwell
+                        case '28': command = 'G28'; break; // Return to home
+                        case '30': command = 'G30'; break; // Return to secondary home
+                        case '40': command = 'G40'; break; // Cancel cutter radius compensation
+                        case '41': command = 'G41'; break; // Left cutter radius compensation
+                        case '42': command = 'G42'; break; // Right cutter radius compensation
+                        case '43': command = 'G43'; break; // Tool length compensation +
+                        case '44': command = 'G44'; break; // Tool length compensation -
+                        case '49': command = 'G49'; break; // Cancel tool length compensation
+                        case '80': command = 'G80'; break; // Cancel canned cycle
+                        default:
+                            if (parseInt(gCommand) >= 0 && parseInt(gCommand) <= 99) {
+                                warnings.push(`Line ${lineNum + 1}: Unsupported G-code G${gCommand}: ${originalLine}`);
+                                continue;
+                            } else {
+                                warnings.push(`Line ${lineNum + 1}: Unknown command: ${originalLine}`);
+                                continue;
+                            }
+                    }
+
+                    const isPiercePoint = (lastMoveType === 'rapid' && moveType === 'cutting');
+                    const feedRate = f ? parseFloat(f) : 50;
+
+                    // Error detection
+                    if (newPos.x === currentPos.x && newPos.y === currentPos.y && newPos.z === currentPos.z && moveType === 'cutting') {
+                        errors.push(`Line ${lineNum + 1}: Zero-length cutting move: ${originalLine}`);
+                    }
+
+                    if (feedRate <= 0 && moveType === 'cutting') {
+                        warnings.push(`Line ${lineNum + 1}: Invalid feed rate for cutting: ${originalLine}`);
+                    }
+
+                    toolPath.push({
+                        type: moveType,
+                        command,
+                        start: { ...currentPos },
+                        end: newPos,
+                        feedRate: moveType === 'cutting' ? feedRate : undefined,
+                        isPiercePoint,
+                        sequence,
+                        coordinateSystem: activeCoordinateSystem,
+                        plane: currentPlane,
+                        absoluteMode,
+                        originalLine
+                    });
+
+                    // Update bounds
+                    minX = Math.min(minX, newPos.x);
+                    maxX = Math.max(maxX, newPos.x);
+                    minY = Math.min(minY, newPos.y);
+                    maxY = Math.max(maxY, newPos.y);
+
+                    if (moveType === 'cutting') {
+                        cuttingPerimeter += Math.sqrt((newPos.x - currentPos.x) ** 2 + (newPos.y - currentPos.y) ** 2);
+                        totalFeedRates.push(feedRate);
+                    } else {
+                        rapidLength += Math.sqrt((newPos.x - currentPos.x) ** 2 + (newPos.y - currentPos.id) ** 2);
+                    }
+
+                    if (isPiercePoint) piercingCount++;
+                    
+                    currentPos = newPos;
+                    lastMoveType = moveType;
+                    sequence++;
+                } catch (error) {
+                    errors.push(`Line ${lineNum + 1}: Parse error - ${error.message}: ${originalLine}`);
+                }
+            }
+
+            const averageSpeed = totalFeedRates.length > 0 
+                ? totalFeedRates.reduce((sum, speed) => sum + speed, 0) / totalFeedRates.length
+                : 50;
+
+            return {
+                toolPath,
+                cuttingPerimeter,
+                piercingCount,
+                rapidLength,
+                cuttingSpeed: averageSpeed,
+                boundingBox: {
+                    minX: minX === Infinity ? 0 : minX,
+                    maxX: maxX === -Infinity ? 200 : maxX,
+                    minY: minY === Infinity ? 0 : minY,
+                    maxY: maxY === -Infinity ? 200 : maxY
+                },
+                errors,
+                warnings,
+                activeCoordinateSystem,
+                currentPlane,
+                totalMoves: sequence
+            };
+        }
 
         // Mock Database - Sample Jobs
         const mockDatabase = {
@@ -391,107 +680,6 @@ M09
 M30`
         };
 
-        // Improved NC Parser
-        function parseNCFile(content) {
-            const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-            const toolPath = [];
-            let cuttingPerimeter = 0;
-            let piercingCount = 0;
-            let rapidLength = 0;
-            let totalFeedRates = [];
-            
-            // Track bounds for better visualization
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-            
-            let currentPos = { x: 0, y: 0 };
-            let sequence = 0;
-            let lastMoveType = 'rapid';
-
-            for (let lineNum = 0; lineNum < lines.length; lineNum++) {
-                const line = lines[lineNum];
-                
-                if (line.startsWith(';') || line.startsWith('(') || line.trim() === '') {
-                    continue;
-                }
-
-                try {
-                    const tokens = line.toUpperCase().split(/[\s,]+/);
-                    const x = tokens.find(t => t.startsWith('X'))?.substring(1);
-                    const y = tokens.find(t => t.startsWith('Y'))?.substring(1);
-                    const f = tokens.find(t => t.startsWith('F'))?.substring(1);
-                    const gCommand = tokens.find(t => t.startsWith('G'))?.substring(1);
-
-                    if (!gCommand) continue;
-
-                    const newPos = {
-                        x: x ? parseFloat(x) : currentPos.x,
-                        y: y ? parseFloat(y) : currentPos.y
-                    };
-
-                    let moveType, command;
-                    switch (gCommand) {
-                        case '0': moveType = 'rapid'; command = 'G00'; break;
-                        case '1': moveType = 'cutting'; command = 'G01'; break;
-                        case '2': moveType = 'cutting'; command = 'G02'; break;
-                        case '3': moveType = 'cutting'; command = 'G03'; break;
-                        default: continue;
-                    }
-
-                    const isPiercePoint = (lastMoveType === 'rapid' && moveType === 'cutting');
-                    const feedRate = f ? parseFloat(f) : 50;
-
-                    toolPath.push({
-                        type: moveType,
-                        command,
-                        start: { ...currentPos },
-                        end: newPos,
-                        feedRate: moveType === 'cutting' ? feedRate : undefined,
-                        isPiercePoint,
-                        sequence
-                    });
-
-                    // Update bounds
-                    minX = Math.min(minX, newPos.x);
-                    maxX = Math.max(maxX, newPos.x);
-                    minY = Math.min(minY, newPos.y);
-                    maxY = Math.max(maxY, newPos.y);
-
-                    if (moveType === 'cutting') {
-                        cuttingPerimeter += Math.sqrt((newPos.x - currentPos.x) ** 2 + (newPos.y - currentPos.y) ** 2);
-                        totalFeedRates.push(feedRate);
-                    } else {
-                        rapidLength += Math.sqrt((newPos.x - currentPos.x) ** 2 + (newPos.y - currentPos.y) ** 2);
-                    }
-
-                    if (isPiercePoint) piercingCount++;
-                    
-                    currentPos = newPos;
-                    lastMoveType = moveType;
-                    sequence++;
-                } catch (error) {
-                    console.warn(`Error parsing line ${lineNum + 1}: ${line}`, error);
-                }
-            }
-
-            const averageSpeed = totalFeedRates.length > 0 
-                ? totalFeedRates.reduce((sum, speed) => sum + speed, 0) / totalFeedRates.length
-                : 50;
-
-            return {
-                toolPath,
-                cuttingPerimeter,
-                piercingCount,
-                rapidLength,
-                cuttingSpeed: averageSpeed,
-                boundingBox: {
-                    minX: minX === Infinity ? 0 : minX,
-                    maxX: maxX === -Infinity ? 200 : maxX,
-                    minY: minY === Infinity ? 0 : minY,
-                    maxY: maxY === -Infinity ? 200 : maxY
-                }
-            };
-        }
-
         // Cut Time Calculator
         function calculateCutTime(pierceCount, pierceTimePerPiece, cuttingPerimeter, cuttingSpeed) {
             const piercingTime = pierceCount * pierceTimePerPiece;
@@ -599,6 +787,117 @@ M30`
             );
         }
 
+        // Enhanced Error Detection Component
+        function ErrorDetection({ errors, warnings }) {
+            if (errors.length === 0 && warnings.length === 0) {
+                return (
+                    <div className="success-message">
+                        ✅ No errors detected in G-code
+                    </div>
+                );
+            }
+
+            return (
+                <div className="error-detection">
+                    <h4>🔍 G-code Analysis Results</h4>
+                    
+                    {errors.length > 0 && (
+                        <div>
+                            <h5 style={{ color: '#f44336' }}>⚠️ Errors ({errors.length}):</h5>
+                            <ul className="error-list">
+                                {errors.map((error, index) => (
+                                    <li key={index} className="error-item critical">
+                                        {error}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                    
+                    {warnings.length > 0 && (
+                        <div>
+                            <h5 style={{ color: '#ff9800' }}>⚠️ Warnings ({warnings.length}):</h5>
+                            <ul className="error-list">
+                                {warnings.map((warning, index) => (
+                                    <li key={index} className="error-item warning">
+                                        {warning}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Enhanced G-code Viewer Component
+        function GCodeViewer({ toolPath }) {
+            return (
+                <div className="gcode-viewer">
+                    <h4>📋 G-code Viewer</h4>
+                    {toolPath.map((move, index) => (
+                        <div 
+                            key={index} 
+                            className={`gcode-line ${move.type} ${move.command.startsWith('(') ? 'comment' : ''}`}
+                        >
+                            {move.sequence.toString().padStart(4, '0')}: {move.originalLine}
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        // Enhanced Features Display Component
+        function EnhancedFeatures({ parsedData }) {
+            return (
+                <div className="enhanced-features">
+                    <h3>⚙️ CNC.js Enhanced Features</h3>
+                    <div className="feature-grid">
+                        <div className="feature-item">
+                            <strong>Coordinate System:</strong><br/>
+                            {parsedData.activeCoordinateSystem}
+                        </div>
+                        <div className="feature-item">
+                            <strong>Active Plane:</strong><br/>
+                            {parsedData.currentPlane}
+                        </div>
+                        <div className="feature-item">
+                            <strong>Total Commands:</strong><br/>
+                            {parsedData.totalMoves}
+                        </div>
+                        <div className="feature-item">
+                            <strong>Positioning Mode:</strong><br/>
+                            {parsedData.absoluteMode ? 'Absolute' : 'Relative'}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Coordinate Systems Display Component
+        function CoordinateSystems({ activeSystem }) {
+            const systems = ['G54', 'G55', 'G56', 'G57', 'G58', 'G59'];
+            return (
+                <div>
+                    <h4>📐 Coordinate Systems</h4>
+                    <div className="coordinate-systems">
+                        {systems.map(system => (
+                            <div 
+                                key={system} 
+                                className={`coordinate-system ${system === activeSystem ? 'active' : ''}`}
+                                style={{ 
+                                    background: system === activeSystem ? '#4caf50' : '#2196f3',
+                                    transform: system === activeSystem ? 'scale(1.1)' : 'scale(1)'
+                                }}
+                            >
+                                {system}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
         // Job Details Component
         function JobDetails({ jobData }) {
             return (
@@ -660,7 +959,7 @@ M30`
             );
         }
 
-        // Simulation Canvas Component
+        // Enhanced Simulation Canvas Component
         function SimulationCanvas({ ncFileContent, parsedData, jobData }) {
             const canvasRef = useRef(null);
 
@@ -703,7 +1002,21 @@ M30`
                     ctx.stroke();
                 }
 
-                // Draw tool path
+                // Draw coordinate system origins
+                const coordSystems = ['G54', 'G55', 'G56', 'G57', 'G58', 'G59'];
+                coordSystems.forEach((system, index) => {
+                    if (system === parsedData.activeCoordinateSystem) {
+                        ctx.fillStyle = '#4caf50';
+                        ctx.beginPath();
+                        ctx.arc(50 + index * 60, 30, 8, 0, 2 * Math.PI);
+                        ctx.fill();
+                        ctx.fillStyle = '#fff';
+                        ctx.font = '10px Arial';
+                        ctx.fillText(system, 45 + index * 60, 35);
+                    }
+                });
+
+                // Draw tool path with enhanced visualization
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
                 
@@ -744,7 +1057,7 @@ M30`
                     currentPos = move.end;
                 });
 
-                // Draw bounds
+                // Draw bounds with coordinate system info
                 if (bounds.maxX > 0 || bounds.maxY > 0) {
                     ctx.strokeStyle = '#999';
                     ctx.lineWidth = 1;
@@ -756,7 +1069,7 @@ M30`
 
             return (
                 <div>
-                    <h3>🔧 Cutting Simulation</h3>
+                    <h3>🔧 Enhanced Cutting Simulation</h3>
                     <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                         <canvas ref={canvasRef} style={{ border: '1px solid #ddd', borderRadius: '8px' }} />
                     </div>
@@ -765,6 +1078,8 @@ M30`
                         <div><strong>Cutting Moves:</strong> {parsedData.toolPath.filter(m => m.type === 'cutting').length}</div>
                         <div><strong>Rapid Moves:</strong> {parsedData.toolPath.filter(m => m.type === 'rapid').length}</div>
                         <div><strong>Pierce Points:</strong> {parsedData.piercingCount}</div>
+                        <div><strong>Active Coord System:</strong> {parsedData.activeCoordinateSystem}</div>
+                        <div><strong>Current Plane:</strong> {parsedData.currentPlane}</div>
                     </div>
                 </div>
             );
@@ -902,8 +1217,8 @@ M30`
             return (
                 <div className="app">
                     <header className="app-header">
-                        <h1>🔧 Waterjet NC File Reader</h1>
-                        <p>View cutting simulations and calculate cut times</p>
+                        <h1>🔧 Enhanced Waterjet NC File Reader</h1>
+                        <p>CNC.js Enhanced G-code Analysis & Simulation</p>
                     </header>
 
                     <main className="app-main">
@@ -938,6 +1253,18 @@ M30`
                                 <div className="job-content">
                                     <div className="left-panel">
                                         <JobDetails jobData={currentJob} />
+                                        
+                                        {/* CNC.js Enhanced Features */}
+                                        <EnhancedFeatures parsedData={currentJob.parsedData} />
+                                        
+                                        {/* Coordinate Systems */}
+                                        <CoordinateSystems activeSystem={currentJob.parsedData.activeCoordinateSystem} />
+                                        
+                                        {/* Error Detection */}
+                                        <ErrorDetection 
+                                            errors={currentJob.parsedData.errors} 
+                                            warnings={currentJob.parsedData.warnings} 
+                                        />
                                     </div>
 
                                     <div className="right-panel">
@@ -946,6 +1273,9 @@ M30`
                                             parsedData={currentJob.parsedData}
                                             jobData={currentJob}
                                         />
+                                        
+                                        {/* G-code Viewer */}
+                                        <GCodeViewer toolPath={currentJob.parsedData.toolPath} />
                                     </div>
                                 </div>
                             </div>
