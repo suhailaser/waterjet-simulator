@@ -1,12 +1,42 @@
 {
-  "name": "waterjet-simulator-frontend",
+  "name": "waterjet-simulator",
   "version": "1.0.0",
-  "description": "Frontend-only waterjet cutting simulator",
-  "private": true,
-  "dependencies": {},
+  "description": "Full-stack web application for waterjet cutting simulation",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "serve -s build -l 3000",
-    "build": "echo 'Building frontend-only application' && mkdir -p build && cp -r public/* build/ 2>/dev/null || echo 'Public files copied'",
-    "dev": "echo 'Development server not needed for this version'"
+    "build": "react-scripts build",
+    "start": "react-scripts start",
+    "dev": "react-scripts start",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "dependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "jsqr": "^1.4.0",
+    "typescript": "^4.9.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.5"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }
