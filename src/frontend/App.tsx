@@ -4,7 +4,8 @@ import { JobDetails } from './JobDetails';
 import { SimulationCanvas } from './SimulationCanvas';
 import { CutTimeCalculator } from './CutTimeCalculator';
 import { FileUpload } from './FileUpload';
-import { JobMetadata, ParsedNCData, APIResponse } from '../shared/types';
+import { NCParser } from '../shared/ncParser';
+import { getJob, getNCFile, type JobMetadata } from './mockDatabase';
 import './App.css';
 
 interface JobData {
@@ -25,14 +26,13 @@ interface JobData {
   cuttingSpeed: number;
   pierceTime: number;
   otherMetadata: any;
-  parsedData: ParsedNCData;
+  parsedData: any;
 }
 
 function App() {
   const [currentJob, setCurrentJob] = useState<JobData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiBaseUrl] = useState('http://localhost:3001/api');
   const [uploadedFile, setUploadedFile] = useState<{ content: string; filename: string } | null>(null);
 
   // Handle barcode scan result
@@ -41,18 +41,62 @@ function App() {
     setError(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/jobs/${barcode}`);
-      const result: APIResponse<JobData> = await response.json();
-
-      if (result.success && result.data) {
-        setCurrentJob(result.data);
-      } else {
-        setError(result.error || 'Failed to fetch job data');
+      // Get job data from local database
+      const job = getJob(barcode);
+      if (!job) {
+        setError(`Job with ID '${barcode}' not found`);
         setCurrentJob(null);
+        return;
       }
+
+      // Get NC file content
+      const ncFileContent = getNCFile(barcode);
+      if (!ncFileContent) {
+        setError(`NC file for job '${barcode}' not found`);
+        setCurrentJob(null);
+        return;
+      }
+
+      // Parse NC file
+      const parser = new NCParser();
+      const parsedData = parser.parseNCFile(ncFileContent);
+
+      // Calculate cut time using defaults
+      const pierceTimePerPiece = 0.5; // Default 30 seconds in minutes
+      const cuttingSpeed = job.cuttingParameters.averageSpeed || 50; // Default 50 mm/min
+      const cutTimeResult = NCParser.calculateCutTime(
+        parsedData.piercingCount,
+        pierceTimePerPiece,
+        parsedData.cuttingPerimeter,
+        cuttingSpeed
+      );
+
+      const jobData: JobData = {
+        client: job.client,
+        material: job.material,
+        sheetName: job.sheetName,
+        sheetSize: job.sheetSize,
+        machine: job.machine,
+        parts: job.parts,
+        estimatedTimes: job.estimatedTimes,
+        ncFileContent,
+        cuttingSpeed,
+        pierceTime: pierceTimePerPiece,
+        otherMetadata: {
+          pressure: job.machine.pressure,
+          abrasiveFlow: job.machine.abrasiveFlow,
+          toolDiameter: job.machine.toolDiameter
+        },
+        parsedData: {
+          ...parsedData,
+          approxCutTime: cutTimeResult.totalTime
+        }
+      };
+
+      setCurrentJob(jobData);
     } catch (err) {
       console.error('Error fetching job:', err);
-      setError('Network error. Please check if the server is running.');
+      setError('Failed to load job data');
       setCurrentJob(null);
     } finally {
       setLoading(false);
@@ -67,68 +111,57 @@ function App() {
   };
 
   // Handle file upload
-  const handleFileLoaded = async (content: string, filename: string) => {
+  const handleFileLoaded = (content: string, filename: string) => {
     setLoading(true);
     setError(null);
     setUploadedFile({ content, filename });
 
     try {
       // Parse the uploaded NC file
-      const response = await fetch(`${apiBaseUrl}/parse-nc`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const parser = new NCParser();
+      const parsedData = parser.parseNCFile(content);
+
+      // Create a mock job data structure for uploaded files
+      const mockJob: JobData = {
+        client: 'Uploaded File',
+        material: {
+          type: 'Unknown',
+          thickness: 10
         },
-        body: JSON.stringify({ ncFileContent: content }),
-      });
+        sheetName: filename,
+        sheetSize: {
+          width: parsedData.boundingBox.maxX - parsedData.boundingBox.minX || 1000,
+          height: parsedData.boundingBox.maxY - parsedData.boundingBox.minY || 1000
+        },
+        machine: {
+          name: 'Unknown',
+          pressure: 3000,
+          orifice: 0.3,
+          abrasiveQuality: 'Unknown',
+          nozzleDiameter: 0.8,
+          abrasiveFlow: 400,
+          toolDiameter: 1.0
+        },
+        parts: [],
+        estimatedTimes: {
+          rapid: 0,
+          marking: 0,
+          piercing: 0,
+          drilling: 0,
+          cutting: 0,
+          total: 0
+        },
+        ncFileContent: content,
+        cuttingSpeed: parsedData.cuttingSpeed,
+        pierceTime: 0.5,
+        otherMetadata: {},
+        parsedData
+      };
 
-      const result: APIResponse<ParsedNCData> = await response.json();
-
-      if (result.success && result.data) {
-        // Create a mock job data structure for uploaded files
-        const mockJob: JobData = {
-          client: 'Uploaded File',
-          material: {
-            type: 'Unknown',
-            thickness: 10
-          },
-          sheetName: filename,
-          sheetSize: {
-            width: result.data.boundingBox.maxX - result.data.boundingBox.minX || 1000,
-            height: result.data.boundingBox.maxY - result.data.boundingBox.minY || 1000
-          },
-          machine: {
-            name: 'Unknown',
-            pressure: 3000,
-            orifice: 0.3,
-            abrasiveQuality: 'Unknown',
-            nozzleDiameter: 0.8,
-            abrasiveFlow: 400,
-            toolDiameter: 1.0
-          },
-          parts: [],
-          estimatedTimes: {
-            rapid: 0,
-            marking: 0,
-            piercing: 0,
-            drilling: 0,
-            cutting: 0,
-            total: 0
-          },
-          ncFileContent: content,
-          cuttingSpeed: result.data.cuttingSpeed,
-          pierceTime: 0.5,
-          otherMetadata: {},
-          parsedData: result.data
-        };
-
-        setCurrentJob(mockJob);
-      } else {
-        setError(result.error || 'Failed to parse uploaded file');
-      }
+      setCurrentJob(mockJob);
     } catch (err) {
       console.error('Error parsing uploaded file:', err);
-      setError('Network error. Please check if the server is running.');
+      setError('Failed to parse uploaded file. Please check the file format.');
     } finally {
       setLoading(false);
     }
@@ -145,7 +178,7 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>🔧 Waterjet Simulator</h1>
-        <p>Scan barcode from IGEMS report to view cutting simulation</p>
+        <p>Scan barcode from IGEMS report or upload NC files to view cutting simulation</p>
       </header>
 
       <main className="app-main">
@@ -201,9 +234,9 @@ function App() {
                   onRecalculate={setCurrentJob}
                 />
                 
-                <CutTimeCalculator
+                <CutTimeCalculator 
                   currentJob={currentJob}
-                  onUpdate={(jobData: JobData) => setCurrentJob(jobData)}
+                  onUpdate={(jobData) => setCurrentJob(jobData)}
                 />
               </div>
 
