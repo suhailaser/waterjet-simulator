@@ -125,9 +125,9 @@ function App() {
                   onRecalculate={setCurrentJob}
                 />
                 
-                <CutTimeCalculator 
+                <CutTimeCalculator
                   currentJob={currentJob}
-                  onUpdate={(jobData) => setCurrentJob(jobData)}
+                  onUpdate={(jobData: JobData) => setCurrentJob(jobData)}
                 />
               </div>
 

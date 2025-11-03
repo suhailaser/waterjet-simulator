@@ -226,7 +226,14 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     }
   };
 
-  // Canvas click handler for zoom/pan
+  // Canvas wheel handler for zoom
+  const handleCanvasWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const newZoom = e.deltaY > 0 ? zoom * 0.9 : zoom * 1.1;
+    setZoom(Math.max(0.1, Math.min(5, newZoom)));
+  };
+
+  // Canvas click handler for pan
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -235,17 +242,11 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
-    if (e.ctrlKey) {
-      // Zoom in/out at click position
-      const newZoom = e.deltaY > 0 ? zoom * 0.9 : zoom * 1.1;
-      setZoom(Math.max(0.1, Math.min(5, newZoom)));
-    } else {
-      // Pan
-      setPan(prev => ({
-        x: prev.x + (x - CANVAS_WIDTH / 2) * 0.1,
-        y: prev.y + (y - CANVAS_HEIGHT / 2) * 0.1
-      }));
-    }
+    // Pan
+    setPan(prev => ({
+      x: prev.x + (x - CANVAS_WIDTH / 2) * 0.1,
+      y: prev.y + (y - CANVAS_HEIGHT / 2) * 0.1
+    }));
   };
 
   // Redraw canvas when zoom or pan changes
