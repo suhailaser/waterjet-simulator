@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waterjet NC File Reader</title>
+    <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .app {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .app-header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .app-header h1 {
+            color: #2c3e50;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .app-header p {
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+
+        .app-main {
+            flex: 1;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .scanner-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .job-view {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .job-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+
+        .job-header h2 {
+            color: #2c3e50;
+            margin-left: 20px;
+        }
+
+        .job-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 30px;
+        }
+
+        .left-panel, .right-panel {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .scan-button, .manual-button, .job-button, .back-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .scan-button:hover, .manual-button:hover, .job-button:hover, .back-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .scanner-controls {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .sample-jobs {
+            margin-top: 30px;
+        }
+
+        .sample-jobs h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .job-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .job-button {
+            padding: 12px 25px;
+            font-size: 1rem;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .success-message {
+            background: #27ae60;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #764ba2;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .upload-area input[type="file"] {
+            display: none;
+        }
+
+        .upload-button {
+            background: #667eea;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-button:hover {
+            background: #5a6fd8;
+            transform: translateY(-1px);
+        }
+
+        @media (max-width: 768px) {
+            .app-main {
+                padding: 10px;
+            }
+
+            .app-header h1 {
+                font-size: 2rem;
+            }
+
+            .job-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .job-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // Mock Database - Sample Jobs
+        const mockDatabase = {
+            'SHEET-3670': {
+                jobId: 'SHEET-3670',
+                client: 'SMB Engineers',
+                material: { type: 'Stainless Steel', thickness: 30 },
+                sheetName: 'SHEET-3670',
+                sheetSize: { width: 1000, height: 2000 },
+                machine: {
+                    name: 'AWJ',
+                    pressure: 3200,
+                    orifice: 0.330,
+                    abrasiveQuality: 'GMA Garnet 80 (0.92)',
+                    nozzleDiameter: 0.889,
+                    abrasiveFlow: 450,
+                    toolDiameter: 1.000
+                },
+                cuttingParameters: {
+                    rapidLength: 4522.445,
+                    cuttingLength: 3849.428,
+                    averageSpeed: 49.167,
+                    cuttingTime: 78.28,
+                    totalTime: 79.17
+                },
+                parts: [{
+                    name: 'SMB Eng 30 mm SS waterjet (×2)',
+                    customer: 'SMB Engineers',
+                    quantity: 2,
+                    cuttingLength: 1924.714,
+                    weight: 45.0,
+                    singleTime: 39.14,
+                    totalTime: 78.28
+                }],
+                estimatedTimes: {
+                    rapid: 0.88,
+                    marking: 0,
+                    piercing: 0,
+                    drilling: 0,
+                    cutting: 78.28,
+                    total: 79.17
+                }
+            },
+            'TEST-1234': {
+                jobId: 'TEST-1234',
+                client: 'ABC Manufacturing',
+                material: { type: 'Aluminum', thickness: 10 },
+                sheetName: 'TEST-1234',
+                sheetSize: { width: 500, height: 1000 },
+                machine: {
+                    name: 'AWJ',
+                    pressure: 3800,
+                    orifice: 0.330,
+                    abrasiveQuality: 'GMA Garnet 80 (0.92)',
+                    nozzleDiameter: 0.889,
+                    abrasiveFlow: 350,
+                    toolDiameter: 1.000
+                },
+                cuttingParameters: {
+                    rapidLength: 800.0,
+                    cuttingLength: 1200.0,
+                    averageSpeed: 120.0,
+                    cuttingTime: 10.0,
+                    totalTime: 10.5
+                },
+                parts: [{
+                    name: 'Aluminum bracket',
+                    customer: 'ABC Manufacturing',
+                    quantity: 1,
+                    cuttingLength: 1200.0,
+                    weight: 2.5,
+                    singleTime: 10.0,
+                    totalTime: 10.0
+                }],
+                estimatedTimes: {
+                    rapid: 0.5,
+                    marking: 0,
+                    piercing: 0,
+                    drilling: 0,
+                    cutting: 10.0,
+                    total: 10.5
+                }
+            }
+        };
+
+        const mockNCFiles = {
+            'SHEET-3670': `; Waterjet cutting program for SHEET-3670
+; Material: Stainless Steel 30mm
+; Client: SMB Engineers
+
+G21 ; Metric units
+G90 ; Absolute positioning
+G54 ; Work coordinate system 1
+
+; Initialize
+G00 X0 Y0 Z25.0
+M08 ; Start coolant/abrasive feed
+
+; Part 1 - First cut
+; Move to start position and pierce
+G00 X50 Y50 Z25.0
+G00 Z2.0 ; Rapid down to safe height
+G01 Z0 F500 ; Move to material surface
+G01 X50 Y150 F49.167 ; Start cutting
+G01 X100 Y150 F49.167
+G01 X100 Y50 F49.167
+G01 X50 Y50 F49.167
+; End part 1
+
+; Rapid move to part 2
+G00 X200 Y50 Z25.0
+
+; Part 2 - Second cut
+G00 Z2.0
+G01 Z0 F500
+G01 X200 Y150 F49.167
+G01 X250 Y150 F49.167
+G01 X250 Y50 F49.167
+G01 X200 Y50 F49.167
+; End part 2
+
+; Return to home
+G00 X0 Y0 Z25.0
+M09 ; Stop coolant/abrasive feed
+M30 ; End of program`,
+            'TEST-1234': `; Simple aluminum cutting test
+G21 G90 G54
+G00 X0 Y0 Z25.0
+M08
+G00 X25 Y25 Z2.0
+G01 Z0 F300
+G01 X75 Y25 F120
+G01 X75 Y75 F120
+G01 X25 Y75 F120
+G01 X25 Y25 F120
+G00 Z25.0
+M09
+M30`
+        };
+
+        // Simple NC Parser
+        function parseNCFile(content) {
+            const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            const toolPath = [];
+            let cuttingPerimeter = 0;
+            let piercingCount = 0;
+            let rapidLength = 0;
+            let totalFeedRates = [];
+            
+            let currentPos = { x: 0, y: 0 };
+            let sequence = 0;
+            let lastMoveType = 'rapid';
+
+            for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+                const line = lines[lineNum];
+                
+                if (line.startsWith(';') || line.startsWith('(') || line.trim() === '') {
+                    continue;
+                }
+
+                try {
+                    const tokens = line.toUpperCase().split(/[\s,]+/);
+                    const x = tokens.find(t => t.startsWith('X'))?.substring(1);
+                    const y = tokens.find(t => t.startsWith('Y'))?.substring(1);
+                    const f = tokens.find(t => t.startsWith('F'))?.substring(1);
+                    const gCommand = tokens.find(t => t.startsWith('G'))?.substring(1);
+
+                    if (!gCommand) continue;
+
+                    const newPos = {
+                        x: x ? parseFloat(x) : currentPos.x,
+                        y: y ? parseFloat(y) : currentPos.y
+                    };
+
+                    let moveType, command;
+                    switch (gCommand) {
+                        case '0': moveType = 'rapid'; command = 'G00'; break;
+                        case '1': moveType = 'cutting'; command = 'G01'; break;
+                        case '2': moveType = 'cutting'; command = 'G02'; break;
+                        case '3': moveType = 'cutting'; command = 'G03'; break;
+                        default: continue;
+                    }
+
+                    const isPiercePoint = (lastMoveType === 'rapid' && moveType === 'cutting');
+                    const feedRate = f ? parseFloat(f) : 50;
+
+                    toolPath.push({
+                        type: moveType,
+                        command,
+                        start: { ...currentPos },
+                        end: newPos,
+                        feedRate: moveType === 'cutting' ? feedRate : undefined,
+                        isPiercePoint,
+                        sequence
+                    });
+
+                    if (moveType === 'cutting') {
+                        cuttingPerimeter += Math.sqrt((newPos.x - currentPos.x) ** 2 + (newPos.y - currentPos.y) ** 2);
+                        totalFeedRates.push(feedRate);
+                    } else {
+                        rapidLength += Math.sqrt((newPos.x - currentPos.x) ** 2 + (newPos.y - currentPos.y) ** 2);
+                    }
+
+                    if (isPiercePoint) piercingCount++;
+                    
+                    currentPos = newPos;
+                    lastMoveType = moveType;
+                    sequence++;
+                } catch (error) {
+                    console.warn(`Error parsing line ${lineNum + 1}: ${line}`, error);
+                }
+            }
+
+            const averageSpeed = totalFeedRates.length > 0 
+                ? totalFeedRates.reduce((sum, speed) => sum + speed, 0) / totalFeedRates.length
+                : 50;
+
+            return {
+                toolPath,
+                cuttingPerimeter,
+                piercingCount,
+                rapidLength,
+                cuttingSpeed: averageSpeed,
+                boundingBox: {
+                    minX: 0, maxX: 200, minY: 0, maxY: 200
+                }
+            };
+        }
+
+        // Cut Time Calculator
+        function calculateCutTime(pierceCount, pierceTimePerPiece, cuttingPerimeter, cuttingSpeed) {
+            const piercingTime = pierceCount * pierceTimePerPiece;
+            const cuttingTime = cuttingPerimeter / cuttingSpeed;
+            const totalTime = piercingTime + cuttingTime;
+            return { piercingTime, cuttingTime, totalTime };
+        }
+
+        // Format Time
+        function formatTime(minutes) {
+            const totalSeconds = Math.round(minutes * 60);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes_remaining = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            return `${hours.toString().padStart(2, '0')}:${minutes_remaining.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // File Upload Component
+        function FileUpload({ onFileLoaded, loading }) {
+            const [dragActive, setDragActive] = useState(false);
+
+            const handleDrag = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.type === "dragenter" || e.type === "dragover") {
+                    setDragActive(true);
+                } else if (e.type === "dragleave") {
+                    setDragActive(false);
+                }
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setDragActive(false);
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            };
+
+            const handleChange = (e) => {
+                e.preventDefault();
+                if (e.target.files && e.target.files[0]) {
+                    handleFile(e.target.files[0]);
+                }
+            };
+
+            const handleFile = (file) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const content = e.target.result;
+                    onFileLoaded(content, file.name);
+                };
+                reader.readAsText(file);
+            };
+
+            return (
+                <div className="scanner-section">
+                    <h3>📁 Upload NC Files</h3>
+                    <div 
+                        className={`upload-area ${dragActive ? 'dragover' : ''}`}
+                        onDragEnter={handleDrag}
+                        onDragLeave={handleDrag}
+                        onDragOver={handleDrag}
+                        onDrop={handleDrop}
+                    >
+                        <h4>Drag & drop your NC file here</h4>
+                        <p>Supported formats: .nc, .gcode, .txt, .ngc</p>
+                        <label className="upload-button">
+                            Choose File
+                            <input 
+                                type="file" 
+                                accept=".nc,.gcode,.txt,.ngc"
+                                onChange={handleChange}
+                                disabled={loading}
+                            />
+                        </label>
+                    </div>
+                </div>
+            );
+        }
+
+        // Sample Jobs Component
+        function SampleJobs({ onJobSelect, loading }) {
+            return (
+                <div className="sample-jobs">
+                    <h3>Available Sample Jobs:</h3>
+                    <div className="job-buttons">
+                        <button
+                            onClick={() => onJobSelect('SHEET-3670')}
+                            disabled={loading}
+                            className="job-button"
+                        >
+                            SHEET-3670 (SMB Engineers - Stainless Steel)
+                        </button>
+                        <button
+                            onClick={() => onJobSelect('TEST-1234')}
+                            disabled={loading}
+                            className="job-button"
+                        >
+                            TEST-1234 (ABC Manufacturing - Aluminum)
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Job Details Component
+        function JobDetails({ jobData }) {
+            return (
+                <div>
+                    <h3>📋 Job Details</h3>
+                    
+                    <div className="details-section">
+                        <h4>Client Information</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
+                            <div><strong>Client:</strong> {jobData.client}</div>
+                            <div><strong>Sheet ID:</strong> {jobData.sheetName}</div>
+                        </div>
+                    </div>
+
+                    <div className="details-section">
+                        <h4>Material Specifications</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
+                            <div><strong>Material:</strong> {jobData.material.type}</div>
+                            <div><strong>Thickness:</strong> {jobData.material.thickness} mm</div>
+                            <div><strong>Sheet Size:</strong> {jobData.sheetSize.width} × {jobData.sheetSize.height} mm</div>
+                        </div>
+                    </div>
+
+                    <div className="details-section">
+                        <h4>Machine Parameters</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
+                            <div><strong>Machine:</strong> {jobData.machine.name}</div>
+                            <div><strong>Pressure:</strong> {jobData.machine.pressure} bar</div>
+                            <div><strong>Orifice:</strong> {jobData.machine.orifice} mm</div>
+                            <div><strong>Nozzle:</strong> {jobData.machine.nozzleDiameter} mm</div>
+                            <div><strong>Abrasive:</strong> {jobData.machine.abrasiveQuality}</div>
+                            <div><strong>Flow Rate:</strong> {jobData.machine.abrasiveFlow} g/min</div>
+                        </div>
+                    </div>
+
+                    <div className="details-section">
+                        <h4>Cutting Statistics</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
+                            <div><strong>Cutting Perimeter:</strong> {jobData.parsedData.cuttingPerimeter.toFixed(2)} mm</div>
+                            <div><strong>Piercing Points:</strong> {jobData.parsedData.piercingCount}</div>
+                            <div><strong>Rapid Length:</strong> {jobData.parsedData.rapidLength.toFixed(2)} mm</div>
+                            <div><strong>Avg Cutting Speed:</strong> {jobData.cuttingSpeed.toFixed(2)} mm/min</div>
+                        </div>
+                    </div>
+
+                    <div className="details-section">
+                        <h4>Time Breakdown (Estimated)</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            <div><strong>Rapid Time:</strong> {formatTime(jobData.estimatedTimes.rapid)}</div>
+                            <div><strong>Marking Time:</strong> {formatTime(jobData.estimatedTimes.marking)}</div>
+                            <div><strong>Piercing Time:</strong> {formatTime(jobData.estimatedTimes.piercing)}</div>
+                            <div><strong>Cutting Time:</strong> {formatTime(jobData.estimatedTimes.cutting)}</div>
+                            <div style={{ gridColumn: '1 / -1', fontWeight: 'bold', fontSize: '1.2em', color: '#667eea' }}>
+                                <strong>Total Time:</strong> {formatTime(jobData.estimatedTimes.total)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Simulation Canvas Component
+        function SimulationCanvas({ ncFileContent, parsedData, jobData }) {
+            const canvasRef = useRef(null);
+
+            useEffect(() => {
+                if (!canvasRef.current || !parsedData) return;
+
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const width = canvas.width = 800;
+                const height = canvas.height = 600;
+
+                // Clear canvas
+                ctx.clearRect(0, 0, width, height);
+                
+                // Calculate scale and offset
+                const scale = Math.min(width / (jobData.sheetSize.width * 1.2), height / (jobData.sheetSize.height * 1.2));
+                const offsetX = (width - jobData.sheetSize.width * scale) / 2;
+                const offsetY = (height - jobData.sheetSize.height * scale) / 2;
+
+                // Draw grid
+                ctx.strokeStyle = '#e0e0e0';
+                ctx.lineWidth = 0.5;
+                const gridSize = 50 * scale;
+                for (let x = 0; x < width; x += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, height);
+                    ctx.stroke();
+                }
+                for (let y = 0; y < height; y += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(width, y);
+                    ctx.stroke();
+                }
+
+                // Draw tool path
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                let currentPos = { x: 0, y: 0 };
+                
+                parsedData.toolPath.forEach((move, index) => {
+                    const startX = currentPos.x * scale + offsetX;
+                    const startY = currentPos.y * scale + offsetY;
+                    const endX = move.end.x * scale + offsetX;
+                    const endY = move.end.y * scale + offsetY;
+                    
+                    if (move.type === 'rapid') {
+                        ctx.strokeStyle = '#ff4444';
+                        ctx.lineWidth = 1;
+                        ctx.setLineDash([5, 5]);
+                    } else {
+                        ctx.strokeStyle = '#4444ff';
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([]);
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                    
+                    if (move.isPiercePoint) {
+                        ctx.fillStyle = '#ffff00';
+                        ctx.beginPath();
+                        ctx.arc(startX, startY, 4, 0, 2 * Math.PI);
+                        ctx.fill();
+                        
+                        ctx.fillStyle = '#000';
+                        ctx.font = '10px Arial';
+                        ctx.fillText((index + 1).toString(), startX + 6, startY - 6);
+                    }
+                    
+                    currentPos = move.end;
+                });
+            }, [parsedData, jobData]);
+
+            return (
+                <div>
+                    <h3>🔧 Cutting Simulation</h3>
+                    <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                        <canvas ref={canvasRef} style={{ border: '1px solid #ddd', borderRadius: '8px' }} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', fontSize: '0.9em' }}>
+                        <div><strong>Total Moves:</strong> {parsedData.toolPath.length}</div>
+                        <div><strong>Cutting Moves:</strong> {parsedData.toolPath.filter(m => m.type === 'cutting').length}</div>
+                        <div><strong>Rapid Moves:</strong> {parsedData.toolPath.filter(m => m.type === 'rapid').length}</div>
+                        <div><strong>Pierce Points:</strong> {parsedData.piercingCount}</div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Main App Component
+        function App() {
+            const [currentJob, setCurrentJob] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+
+            const handleJobSelect = async (jobId) => {
+                setLoading(true);
+                setError(null);
+
+                try {
+                    const job = mockDatabase[jobId];
+                    if (!job) {
+                        setError(`Job with ID '${jobId}' not found`);
+                        setCurrentJob(null);
+                        return;
+                    }
+
+                    const ncFileContent = mockNCFiles[jobId];
+                    const parsedData = parseNCFile(ncFileContent);
+
+                    const pierceTimePerPiece = 0.5;
+                    const cuttingSpeed = job.cuttingParameters.averageSpeed || 50;
+                    const cutTimeResult = calculateCutTime(
+                        parsedData.piercingCount,
+                        pierceTimePerPiece,
+                        parsedData.cuttingPerimeter,
+                        cuttingSpeed
+                    );
+
+                    const jobData = {
+                        ...job,
+                        ncFileContent,
+                        cuttingSpeed,
+                        pierceTime: pierceTimePerPiece,
+                        parsedData: {
+                            ...parsedData,
+                            approxCutTime: cutTimeResult.totalTime
+                        }
+                    };
+
+                    setCurrentJob(jobData);
+                } catch (err) {
+                    console.error('Error fetching job:', err);
+                    setError('Failed to load job data');
+                    setCurrentJob(null);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleFileLoaded = (content, filename) => {
+                setLoading(true);
+                setError(null);
+
+                try {
+                    const parsedData = parseNCFile(content);
+
+                    const mockJob = {
+                        client: 'Uploaded File',
+                        material: { type: 'Unknown', thickness: 10 },
+                        sheetName: filename,
+                        sheetSize: {
+                            width: parsedData.boundingBox.maxX - parsedData.boundingBox.minX || 1000,
+                            height: parsedData.boundingBox.maxY - parsedData.boundingBox.minY || 1000
+                        },
+                        machine: {
+                            name: 'Unknown',
+                            pressure: 3000,
+                            orifice: 0.3,
+                            abrasiveQuality: 'Unknown',
+                            nozzleDiameter: 0.8,
+                            abrasiveFlow: 400,
+                            toolDiameter: 1.0
+                        },
+                        parts: [],
+                        estimatedTimes: {
+                            rapid: 0, marking: 0, piercing: 0, drilling: 0, cutting: 0, total: 0
+                        },
+                        ncFileContent: content,
+                        cuttingSpeed: parsedData.cuttingSpeed,
+                        pierceTime: 0.5,
+                        parsedData
+                    };
+
+                    setCurrentJob(mockJob);
+                } catch (err) {
+                    console.error('Error parsing uploaded file:', err);
+                    setError('Failed to parse uploaded file. Please check the file format.');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleReset = () => {
+                setCurrentJob(null);
+                setError(null);
+            };
+
+            return (
+                <div className="app">
+                    <header className="app-header">
+                        <h1>🔧 Waterjet NC File Reader</h1>
+                        <p>View cutting simulations and calculate cut times</p>
+                    </header>
+
+                    <main className="app-main">
+                        {!currentJob && (
+                            <div className="scanner-section">
+                                <div className="scanner-controls">
+                                    <h3>📱 Quick Access</h3>
+                                    <p>Use the sample jobs below or upload your own NC files</p>
+                                </div>
+
+                                <FileUpload
+                                    onFileLoaded={handleFileLoaded}
+                                    loading={loading}
+                                />
+
+                                <SampleJobs
+                                    onJobSelect={handleJobSelect}
+                                    loading={loading}
+                                />
+                            </div>
+                        )}
+
+                        {currentJob && (
+                            <div className="job-view">
+                                <div className="job-header">
+                                    <button onClick={handleReset} className="back-button">
+                                        ← Back to Jobs
+                                    </button>
+                                    <h2>{currentJob.client} - {currentJob.material.type}</h2>
+                                </div>
+
+                                <div className="job-content">
+                                    <div className="left-panel">
+                                        <JobDetails jobData={currentJob} />
+                                    </div>
+
+                                    <div className="right-panel">
+                                        <SimulationCanvas 
+                                            ncFileContent={currentJob.ncFileContent}
+                                            parsedData={currentJob.parsedData}
+                                            jobData={currentJob}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {loading && (
+                        <div className="loading-overlay">
+                            <div className="loading-spinner"></div>
+                            <p>Loading job data...</p>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div style={{
+                            position: 'fixed',
+                            top: '20px',
+                            right: '20px',
+                            background: '#e74c3c',
+                            color: 'white',
+                            padding: '15px 20px',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                            zIndex: 1000
+                        }}>
+                            ❌ {error}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

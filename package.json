@@ -1,42 +1,15 @@
 {
   "name": "waterjet-simulator",
   "version": "1.0.0",
-  "description": "Full-stack web application for waterjet cutting simulation",
-  "main": "dist/server.js",
+  "description": "Standalone waterjet cutting simulator",
+  "private": true,
   "scripts": {
-    "build": "react-scripts build",
-    "start": "react-scripts start",
-    "dev": "react-scripts start",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "start": "serve -s build -l 3000",
+    "build": "mkdir -p build && cp src/index.html build/index.html",
+    "dev": "serve -s build -l 3000"
   },
-  "dependencies": {
-    "@types/react": "^18.2.15",
-    "@types/react-dom": "^18.2.7",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "jsqr": "^1.4.0",
-    "typescript": "^4.9.5"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "@types/node": "^20.4.5"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "serve": "^14.0.0"
   }
 }
