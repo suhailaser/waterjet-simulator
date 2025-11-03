@@ -4,7 +4,7 @@
   "description": "Full-stack web application for waterjet cutting simulation",
   "main": "dist/server.js",
   "scripts": {
-    "build": "npm run build:frontend",
+    "build": "tsc && npm run build:frontend",
     "build:frontend": "react-scripts build",
     "start": "node dist/server.js",
     "dev": "concurrently \"npm run build:watch\" \"npm run start:server\"",
